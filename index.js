@@ -13,7 +13,6 @@ const axios = require('axios');
 
 const TOKEN = process.env.BOT_TOKEN; // Bot tokeni
 const CHAT_ID = '8027352397'; // Foydalanuvchi yoki kanal chat ID'si
-const MESSAGE = 'Salom! Bugun yangi aksiya bor 🚀';
 
 axios.post(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
     chat_id: CHAT_ID,
