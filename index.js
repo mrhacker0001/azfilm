@@ -17,72 +17,8 @@ admin.initializeApp({
 const db = admin.firestore();
 const userStates = {}; // Foydalanuvchilarning holatini saqlash uchun
 const advData = {}; // Adminning reklama ma'lumotlarini saqlash uchun
-const CHANNELS = [
-    { name: "1 - kanal", url: "https://t.me/+mrRDsB_N9kBjMTgy", id: "-1002602384037" },
-];
 
-async function checkUserInChannel(userId, channelUsername, bot) {
-    try {
-        const res = await bot.telegram.getChatMember(channelUsername, userId);
-        return (
-            res.status === "member" ||
-            res.status === "administrator" ||
-            res.status === "creator"
-        );
-    } catch (e) {
-        console.error(`❌ Xatolik kanalni tekshirishda: ${channelUsername}`, e.message);
-        return false;
-    }
-}
-
-bot.start(async (ctx) => {
-    const userId = ctx.from.id;
-
-    // A'zolikni tekshirish
-    let notJoined = [];
-
-    for (const ch of CHANNELS) {
-        const isMember = await checkUserInChannel(userId, ch.id, bot);
-        if (!isMember) notJoined.push(ch);
-    }
-
-    // Agar kanalga aʼzo bo‘lmasa
-    if (notJoined.length > 0) {
-        let msg = "❌ Kechirasiz botimizdan foydalanishdan oldin ushbu kanallarga aʼzo bo‘lishingiz kerak.\n\n";
-        const buttons = [];
-
-        for (const ch of notJoined) {
-            msg += `➡️ ${ch.name}: ${ch.url}\n`;
-            buttons.push([Markup.button.url(ch.name, ch.url)]);
-        }
-
-        buttons.push([Markup.button.callback("✅ Tekshirish", "check_channels")]);
-
-        return ctx.reply(msg, Markup.inlineKeyboard(buttons));
-    }
-
-    // Aʼzo bo‘lgan bo‘lsa, davom ettirish
-    return ctx.reply("✅ Botga xush kelibsiz! Kino kodini yuboring yoki menyudan foydalaning.");
-});
-
-bot.action("check_channels", async (ctx) => {
-    const userId = ctx.from.id;
-
-    let notJoined = [];
-
-    for (const ch of CHANNELS) {
-        const isMember = await checkUserInChannel(userId, ch.id, bot);
-        if (!isMember) notJoined.push(ch);
-    }
-
-    if (notJoined.length > 0) {
-        await ctx.answerCbQuery("❌ Hali ham baʼzi kanallarga aʼzo emassiz.", { show_alert: true });
-    } else {
-        await ctx.answerCbQuery("✅ Tasdiqlandi! Endi botdan foydalanishingiz mumkin.");
-        await ctx.reply("🎉 Botga hush kelibsiz! Endi kino kodini yuborishingiz mumkin.");
-    }
-});
-
+// START komandasi: foydalanuvchini ro'yxatdan o'tkazish va menyuni sozlash
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const userRef = db.collection("users").doc(userId.toString());
@@ -109,6 +45,7 @@ bot.start(async (ctx) => {
     );
 });
 
+// Foydalanuvchi foto (reklama uchun) yuborsa — faqat admin uchun
 bot.on("photo", async (ctx) => {
     const userId = ctx.from.id;
     // Reklama bosqichida bo'lgan adminni qabul qilamiz
@@ -121,6 +58,7 @@ bot.on("photo", async (ctx) => {
     await ctx.reply("📝 Endi reklama matnini kiriting (matn ichida link bo‘lishi mumkin):");
 });
 
+// Reklama bosqichi: admin "📢 Reklama yuborish" tugmasini bosishi
 bot.hears("📢 Reklama yuborish", async (ctx) => {
     const userId = ctx.from.id;
     if (userId !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
@@ -130,12 +68,14 @@ bot.hears("📢 Reklama yuborish", async (ctx) => {
     await ctx.reply("🖼 Iltimos, reklama uchun rasm yuboring:");
 });
 
+// Foydalanuvchilar sonini ko'rsatish (faqat admin)
 bot.hears("👥 Obunachilar soni", async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
     const snapshot = await db.collection("users").get();
     await ctx.reply(`📊 Hozircha botda *${snapshot.size}* ta foydalanuvchi mavjud.`, { parse_mode: "Markdown" });
 });
 
+// Kino ro'yxati
 bot.hears("📜 Kino roʻyxati", async (ctx) => {
     const snapshot = await db.collection("films").get();
     if (snapshot.empty) return ctx.reply("❌ Hozircha hech qanday kino qoʻshilmagan.");
@@ -148,10 +88,12 @@ bot.hears("📜 Kino roʻyxati", async (ctx) => {
     await ctx.reply(message, { parse_mode: "Markdown" });
 });
 
+// Kino izlash tugmasi
 bot.hears("🔍 Kino izlash", (ctx) => {
     ctx.reply("🔎 Iltimos, siz izlayotgan kino kodini yuboring!");
 });
 
+// Asosiy "text" handleri — reklama matni yoki kino kodi qabul qilinadi
 bot.on("text", async (ctx) => {
     const userId = ctx.from.id;
     const text = ctx.message.text.trim();
@@ -175,22 +117,30 @@ bot.on("text", async (ctx) => {
 
     // Agar reklama jarayoniga aloqador bo'lmasa, kino kodi sifatida qabul qilamiz:
     const filmDoc = await db.collection("films").doc(text).get();
-    if (!filmDoc.exists) {
-        return ctx.reply("❌ Kino topilmadi.");
+    if (filmDoc.exists) {
+        const film = filmDoc.data();
+        try {
+            await ctx.replyWithVideo(film.video_link, {
+                caption: `🎬 *${film.title}*\n📌 *Janr:* ${film.genre}\n📝 *Tavsif:* ${film.description}\n📅 *Yil:* ${film.year}`,
+                parse_mode: "Markdown"
+            });
+        } catch (err) {
+            console.error("Video yuborishda xatolik:", err.message);
+            await ctx.reply("❌ Video yuborishda xatolik yuz berdi.");
+        }
+        return;
     }
 
-    const film = filmDoc.data();
-    try {
-        await ctx.replyWithVideo(film.video_link, {
-            caption: `🎬 *${film.title}*\n📌 *Janr:* ${film.genre}\n📝 *Tavsif:* ${film.description}\n📅 *Yil:* ${film.year}`,
-            parse_mode: "Markdown"
-        });
-    } catch (err) {
-        console.error("Video yuborishda xatolik:", err.message);
-        await ctx.reply("❌ Video yuborishda xatolik yuz berdi.");
-    }
+    // Agar kino topilmasa, so'rov Firestore ga yoziladi
+    await db.collection("requests").add({
+        title: text,
+        requestedAt: admin.firestore.Timestamp.now(),
+    });
+    await ctx.reply("⏳ Bu kino hozircha bazada yoʻq. Soʻrovingiz qabul qilindi!");
+    bot.telegram.sendMessage(ADMIN_CHAT_ID, `📌 *Yangi kino so‘rovi:* ${text}`, { parse_mode: "Markdown" });
 });
 
+// Callback query: reklama tasdiqlash yoki bekor qilish
 bot.action("confirm_adv", async (ctx) => {
     const userId = ctx.from.id;
     // Faqat admin uchun
