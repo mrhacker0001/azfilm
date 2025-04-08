@@ -17,6 +17,72 @@ admin.initializeApp({
 const db = admin.firestore();
 const userStates = {}; // Foydalanuvchilarning holatini saqlash uchun
 const advData = {}; // Adminning reklama ma'lumotlarini saqlash uchun
+const CHANNELS = [
+    { name: "1 - kanal", url: "https://https://t.me/+qLe2P0LOZBpiMGYy", id: "-1002602384037" },
+];
+
+async function checkUserInChannel(userId, channelUsername, bot) {
+    try {
+        const res = await bot.telegram.getChatMember(channelUsername, userId);
+        return (
+            res.status === "member" ||
+            res.status === "administrator" ||
+            res.status === "creator"
+        );
+    } catch (e) {
+        console.error(`❌ Xatolik kanalni tekshirishda: ${channelUsername}`, e.message);
+        return false;
+    }
+}
+
+bot.start(async (ctx) => {
+    const userId = ctx.from.id;
+
+    // A'zolikni tekshirish
+    let notJoined = [];
+
+    for (const ch of CHANNELS) {
+        const isMember = await checkUserInChannel(userId, ch.id, bot);
+        if (!isMember) notJoined.push(ch);
+    }
+
+    // Agar kanalga aʼzo bo‘lmasa
+    if (notJoined.length > 0) {
+        let msg = "❌ Kechirasiz botimizdan foydalanishdan oldin ushbu kanallarga aʼzo bo‘lishingiz kerak.\n\n";
+        const buttons = [];
+
+        for (const ch of notJoined) {
+            msg += `➡️ ${ch.name}: ${ch.url}\n`;
+            buttons.push([Markup.button.url(ch.name, ch.url)]);
+        }
+
+        buttons.push([Markup.button.callback("✅ Tekshirish", "check_channels")]);
+
+        return ctx.reply(msg, Markup.inlineKeyboard(buttons));
+    }
+
+    // Aʼzo bo‘lgan bo‘lsa, davom ettirish
+    return ctx.reply("✅ Botga xush kelibsiz! Kino kodini yuboring yoki menyudan foydalaning.");
+});
+
+bot.action("check_channels", async (ctx) => {
+    const userId = ctx.from.id;
+
+    let notJoined = [];
+
+    for (const ch of CHANNELS) {
+        const isMember = await checkUserInChannel(userId, ch.id, bot);
+        if (!isMember) notJoined.push(ch);
+    }
+
+    if (notJoined.length > 0) {
+        await ctx.answerCbQuery("❌ Hali ham baʼzi kanallarga aʼzo emassiz.", { show_alert: true });
+    } else {
+        await ctx.answerCbQuery("✅ Tasdiqlandi! Endi botdan foydalanishingiz mumkin.");
+        await ctx.reply("🎉 Botga hush kelibsiz! Endi kino kodini yuborishingiz mumkin.");
+    }
+});
+
 
 // START komandasi: foydalanuvchini ro'yxatdan o'tkazish va menyuni sozlash
 bot.start(async (ctx) => {
