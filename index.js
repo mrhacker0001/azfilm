@@ -1,40 +1,21 @@
 const { Telegraf, Markup } = require("telegraf");
 const admin = require("firebase-admin");
 require("dotenv").config();
-const axios = require("axios");
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const TOKEN = process.env.BOT_TOKEN;
-const CHAT_ID = "8027352397";
-const MESSAGE = "Salom! Bugun yangi aksiya bor 🚀";
+const ADMIN_ID = 8027352397; // O'zingizning Telegram ID'ingiz
+const ADMIN_CHAT_ID = "@azfilm_request";
 
-// 🔹 Firebase'ga ulanadigan JSON faylni o‘qish
 const serviceAccount = JSON.parse(
     Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS, "base64").toString("utf-8")
 );
 
-// 🔹 Firebase’ni ishga tushirish
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
 });
 
 const db = admin.firestore();
-const ADMIN_CHAT_ID = "@azfilm_request";
-const ADMIN_ID = 8027352397;
-const userStates = {}; // Foydalanuvchilarning holatini saqlash
-
-// Xabar yuborish (ReferenceError xatosini oldini olish uchun avval e'lon qildik)
-axios.post(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-    chat_id: CHAT_ID,
-    text: MESSAGE,
-    parse_mode: "HTML"
-})
-    .then(response => {
-        console.log("Xabar yuborildi:", response.data);
-    })
-    .catch(error => {
-        console.error("Xatolik:", error);
-    });
+const userStates = {};
 
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
@@ -44,7 +25,7 @@ bot.start(async (ctx) => {
     if (!doc.exists) {
         await userRef.set({
             userId: userId,
-            firstName: ctx.from.first_name,
+            firstName: ctx.from.first_name || "",
             lastName: ctx.from.last_name || "",
             username: ctx.from.username || "",
             joinedAt: admin.firestore.Timestamp.now(),
@@ -53,7 +34,7 @@ bot.start(async (ctx) => {
 
     const keyboard = [["📜 Kino roʻyxati", "🔍 Kino izlash"]];
     if (userId === ADMIN_ID) {
-        keyboard.push(["📢 Reklama yuborish"]);
+        keyboard.push(["📢 Reklama yuborish", "👥 Obunachilar soni"]);
     }
 
     ctx.reply(
@@ -62,25 +43,19 @@ bot.start(async (ctx) => {
     );
 });
 
+// Faqat admin video yuborishi
 bot.on('video', async (ctx) => {
-    const userId = ctx.from.id;
-
-    // Faqat adminlarga ruxsat
-    if (userId !== ADMIN_ID) {
-        return ctx.reply("❌ Sizga ruxsat yo‘q.");
-    }
+    if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Sizga ruxsat yo‘q.");
 
     const fileId = ctx.message.video.file_id;
-
     await ctx.reply(`✅ Video qabul qilindi!\n📁 <code>${fileId}</code>\n\n💾 Endi bu file_id’ni Firestore bazasiga saqlang.`, {
         parse_mode: "HTML"
     });
 });
 
-
+// Kino ro'yxati
 bot.hears("📜 Kino roʻyxati", async (ctx) => {
-    const filmsRef = db.collection("films");
-    const snapshot = await filmsRef.get();
+    const snapshot = await db.collection("films").get();
 
     if (snapshot.empty) {
         return ctx.reply("❌ Hozircha hech qanday kino qoʻshilmagan.");
@@ -95,79 +70,74 @@ bot.hears("📜 Kino roʻyxati", async (ctx) => {
     ctx.reply(message, { parse_mode: "Markdown" });
 });
 
+// Kino izlash tugmasi
 bot.hears("🔍 Kino izlash", (ctx) => {
-    ctx.reply("🔎 Iltimos, siz izlayotgan kino nomini kiriting!");
+    ctx.reply("🔎 Iltimos, siz izlayotgan kino kodini yuboring!");
 });
 
-bot.hears("📢 Reklama yuborish", async (ctx) => {
-    const userId = ctx.from.id;
-    if (userId !== ADMIN_ID) {
-        return ctx.reply("❌ Siz admin emassiz!");
-    }
-    userStates[userId] = "waiting_for_ad";
+// Obunachilar soni (faqat admin)
+bot.hears("👥 Obunachilar soni", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
+    const snapshot = await db.collection("users").get();
+    ctx.reply(`📊 Hozircha botda *${snapshot.size}* ta foydalanuvchi mavjud.`, { parse_mode: "Markdown" });
+});
+
+// Reklama yuborish (faqat admin)
+bot.hears("📢 Reklama yuborish", (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
+    userStates[ctx.from.id] = "waiting_for_ad";
     ctx.reply("📩 Yuboriladigan xabarni kiriting:");
 });
 
+// Kino kodi bilan qidirish yoki reklama yuborish
 bot.on("text", async (ctx) => {
     const userId = ctx.from.id;
-    const code = ctx.message.text.trim();
+    const text = ctx.message.text.trim();
 
-    // Admin reklama yuborishi
     if (userStates[userId] === "waiting_for_ad") {
         delete userStates[userId];
-        const messageText = ctx.message.text;
-        const usersRef = db.collection("users");
-        const snapshot = await usersRef.get();
-        if (snapshot.empty) {
-            return ctx.reply("❌ Hozircha foydalanuvchilar yoʻq.");
-        }
+        const snapshot = await db.collection("users").get();
+        let sent = 0, failed = 0;
 
-        let count = 0, errors = 0;
         for (const doc of snapshot.docs) {
             const user = doc.data();
             try {
-                await bot.telegram.sendMessage(user.userId, messageText, { parse_mode: "Markdown" });
-                count++;
-            } catch (error) {
-                console.error(`Xatolik: ${error.message}`);
-                errors++;
+                await bot.telegram.sendMessage(user.userId, text, { parse_mode: "Markdown" });
+                sent++;
+            } catch (err) {
+                console.error(err.message);
+                failed++;
             }
         }
-        return ctx.reply(`✅ Reklama ${count} ta foydalanuvchiga yuborildi! ❌ Xatoliklar: ${errors} ta`);
+        return ctx.reply(`✅ Reklama ${sent} ta foydalanuvchiga yuborildi.\n❌ Xatoliklar: ${failed} ta`);
     }
 
-    // Kino kodi orqali izlash
-    const filmRef = db.collection("films").doc(code);
-    const doc = await filmRef.get();
-
-    if (doc.exists) {
-        const film = doc.data();
+    // Kino qidirish
+    const filmDoc = await db.collection("films").doc(text).get();
+    if (filmDoc.exists) {
+        const film = filmDoc.data();
 
         try {
-            await ctx.replyWithVideo(
-                film.video_link, // bu yerda Telegramdagi `file_id` bo'lishi kerak
-                {
-                    caption: `🎬 *${film.title}*\n📌 *Janr:* ${film.genre}\n📝 *Tavsif:* ${film.description}\n📅 *Yil:* ${film.year}`,
-                    parse_mode: "Markdown"
-                }
-            );
-        } catch (error) {
-            console.error("🎥 Video yuborishda xatolik:", error.message);
-            await ctx.reply("❌ Video yuborishda xatolik yuz berdi.");
+            await ctx.replyWithVideo(film.video_link, {
+                caption: `🎬 *${film.title}*\n📌 *Janr:* ${film.genre}\n📝 *Tavsif:* ${film.description}\n📅 *Yil:* ${film.year}`,
+                parse_mode: "Markdown"
+            });
+        } catch (err) {
+            console.error("Video yuborishda xatolik:", err.message);
+            ctx.reply("❌ Video yuborishda xatolik yuz berdi.");
         }
         return;
     }
 
     // Kino topilmasa
     await db.collection("requests").add({
-        title: code,
+        title: text,
         requestedAt: admin.firestore.Timestamp.now(),
     });
 
-    await ctx.reply("⏳ Bu kino hozircha bazada yoʻq. Soʻrovingiz qabul qilindi! 10 daqiqada qoʻshilishi mumkin.");
-    await bot.telegram.sendMessage(ADMIN_CHAT_ID, `📌 *Yangi kino so‘rovi:* ${code}`, { parse_mode: "Markdown" });
+    ctx.reply("⏳ Bu kino hozircha bazada yoʻq. Soʻrovingiz qabul qilindi!");
+    bot.telegram.sendMessage(ADMIN_CHAT_ID, `📌 *Yangi kino so‘rovi:* ${text}`, { parse_mode: "Markdown" });
 });
-
 
 bot.launch();
 console.log("🚀 Bot ishga tushdi!");
