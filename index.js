@@ -52,8 +52,10 @@ bot.start(async (ctx) => {
         const buttons = [];
 
         for (const ch of notJoined) {
-            buttons.push([Markup.button.url(ch.name, ch.url)]);
+            msg += `➡️ ${ch.name}\n`; // Faqat kanal nomi
+            buttons.push([Markup.button.callback("Join", `join_channel_${ch.id}`)]); // Kanalga qo'shilish uchun tugma
         }
+
 
         buttons.push([Markup.button.callback("✅ Tekshirish", "check_channels")]);
 
