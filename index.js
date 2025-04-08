@@ -18,7 +18,7 @@ const db = admin.firestore();
 const userStates = {}; // Foydalanuvchilarning holatini saqlash uchun
 const advData = {}; // Adminning reklama ma'lumotlarini saqlash uchun
 const CHANNELS = [
-    { name: "1 - kanal", url: "https://t.me/+qLe2P0LOZBpiMGYy", id: "-1002602384037" },
+    { name: "1 - kanal", url: "https://https://t.me/c/2602384037/11", id: "-1002602384037" },
 ];
 
 async function checkUserInChannel(userId, channelUsername, bot) {
@@ -52,7 +52,6 @@ bot.start(async (ctx) => {
         const buttons = [];
 
         for (const ch of notJoined) {
-            msg += `➡️ ${ch.name}: ${ch.url}\n`;
             buttons.push([Markup.button.url(ch.name, ch.url)]);
         }
 
