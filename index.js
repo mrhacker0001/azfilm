@@ -45,6 +45,22 @@ bot.start(async (ctx) => {
     );
 });
 
+// Admin video yuborganida — file_id ni qaytarish
+bot.on("video", async (ctx) => {
+    const userId = ctx.from.id;
+
+    // Faqat admin yuborganida javob beradi (ixtiyoriy, xohlasa hamma uchun ochiq qilish mumkin)
+    if (userId !== ADMIN_ID) return ctx.reply("❌ Faqat admin video yuklay oladi.");
+
+    const video = ctx.message.video;
+
+    // file_id ni qaytaramiz
+    await ctx.reply(`🆔 Video file_id:\n\`${video.file_id}\``, { parse_mode: "Markdown" });
+
+    // Optional: Qo‘shimcha ma’lumotlar bilan so‘rasa, shu yerda Firestore’ga saqlash kodini yozish mumkin
+});
+
+
 // Foydalanuvchi foto (reklama uchun) yuborsa — faqat admin uchun
 bot.on("photo", async (ctx) => {
     const userId = ctx.from.id;
