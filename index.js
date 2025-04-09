@@ -85,19 +85,21 @@ bot.action("check_membership", async (ctx) => {
     await ctx.answerCbQuery(); // tugmani bosgandagi loadingni yopish
 });
 
-// Admin video yuborganida — file_id ni qaytarish
-bot.on(["video", "document"], async (ctx) => {
+bot.on('video', async (ctx) => {
     const userId = ctx.from.id;
-    if (userId !== ADMIN_ID) return;
 
-    const file = ctx.message.video || ctx.message.document;
-
-    if (!file.mime_type || !file.mime_type.startsWith("video/")) {
-        return ctx.reply("❌ Faqat video fayl yuboring.");
+    // Faqat adminlarga ruxsat
+    if (userId !== ADMIN_ID) {
+        return ctx.reply("❌ Sizga ruxsat yo‘q.");
     }
 
-    await ctx.reply(`🆔 Video file_id:\n\`${file.file_id}\``, { parse_mode: "Markdown" });
+    const fileId = ctx.message.video.file_id;
+
+    await ctx.reply(`✅ Video qabul qilindi!\n📁 <code>${fileId}</code>\n\n💾 Endi bu file_id’ni Firestore bazasiga saqlang.`, {
+        parse_mode: "HTML"
+    });
 });
+
 
 
 
