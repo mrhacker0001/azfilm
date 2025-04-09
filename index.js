@@ -18,6 +18,9 @@ const db = admin.firestore();
 const userStates = {}; // Foydalanuvchilarning holatini saqlash uchun
 const advData = {}; // Adminning reklama ma'lumotlarini saqlash uchun
 
+const CHANNELS = [
+    "@shar1fjanof_16",
+];
 // START komandasi: foydalanuvchini ro'yxatdan o'tkazish va menyuni sozlash
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
@@ -43,22 +46,59 @@ bot.start(async (ctx) => {
         "🎬 Salom! Kino kodini yuboring yoki pastdagi tugmalardan birini tanlang 👇",
         Markup.keyboard(keyboard).resize()
     );
+
+    const buttons = CHANNELS.map((ch, i) =>
+        [Markup.button.url(`${i + 1} - kanal`, `https://t.me/${ch.replace("@", "")}`)]
+    );
+    buttons.push([Markup.button.callback("✅ Tekshirish", "check_membership")]);
+
+    await ctx.reply(
+        "❌ Kechirasiz botimizdan foydalanishdan oldin ushbu kanallarga a'zo bo'lishingiz kerak.",
+        Markup.inlineKeyboard(buttons)
+    );
+});
+
+bot.action("check_membership", async (ctx) => {
+    const userId = ctx.from.id;
+    let notSubscribed = [];
+
+    for (const ch of CHANNELS) {
+        try {
+            const res = await bot.telegram.getChatMember(ch, userId);
+            if (["left", "kicked"].includes(res.status)) {
+                notSubscribed.push(ch);
+            }
+        } catch (err) {
+            console.log(`Error checking ${ch}:`, err.message);
+            notSubscribed.push(ch);
+        }
+    }
+
+    if (notSubscribed.length === 0) {
+        // Obuna bo'lgan, endi botdan foydalanishga ruxsat beramiz
+        await ctx.reply("✅ Tabriklaymiz! Siz barcha kanallarga a'zo bo'lgansiz. Endi botdan foydalanishingiz mumkin.");
+        // bu yerda menyuni chiqarish mumkin (masalan: ctx.scene.enter, yoki start menyusi)
+    } else {
+        await ctx.reply("❌ Siz hali quyidagi kanallarga obuna bo‘lmagansiz:\n" + notSubscribed.join("\n"));
+    }
+
+    await ctx.answerCbQuery(); // tugmani bosgandagi loadingni yopish
 });
 
 // Admin video yuborganida — file_id ni qaytarish
-bot.on("video", async (ctx) => {
+bot.on(["video", "document"], async (ctx) => {
     const userId = ctx.from.id;
+    if (userId !== ADMIN_ID) return;
 
-    // Faqat admin yuborganida javob beradi (ixtiyoriy, xohlasa hamma uchun ochiq qilish mumkin)
-    if (userId !== ADMIN_ID) return ctx.reply("❌ Faqat admin video yuklay oladi.");
+    const file = ctx.message.video || ctx.message.document;
 
-    const video = ctx.message.video;
+    if (!file.mime_type || !file.mime_type.startsWith("video/")) {
+        return ctx.reply("❌ Faqat video fayl yuboring.");
+    }
 
-    // file_id ni qaytaramiz
-    await ctx.reply(`🆔 Video file_id:\n\`${video.file_id}\``, { parse_mode: "Markdown" });
-
-    // Optional: Qo‘shimcha ma’lumotlar bilan so‘rasa, shu yerda Firestore’ga saqlash kodini yozish mumkin
+    await ctx.reply(`🆔 Video file_id:\n\`${file.file_id}\``, { parse_mode: "Markdown" });
 });
+
 
 
 // Foydalanuvchi foto (reklama uchun) yuborsa — faqat admin uchun
