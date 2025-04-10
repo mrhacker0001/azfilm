@@ -76,7 +76,7 @@ bot.action("check_membership", async (ctx) => {
     }
 
     if (notSubscribed.length === 0) {
-        await ctx.reply("✅ Tabriklaymiz! Siz barcha kanallarga a'zo bo'lgansiz. Endi botdan foydalanishingiz mumkin.");
+        await ctx.reply("✅ Tabriklaymiz! Siz barcha kanallarga a'zo bo'lgansiz. Endi botdan foydalanishingiz mumkindan.");
     } else {
         await ctx.reply("❌ Siz hali quyidagi kanallarga obuna bo‘lmagansiz:\n" + notSubscribed.join("\n"));
     }
