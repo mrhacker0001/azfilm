@@ -101,30 +101,16 @@ bot.on('video', async (ctx) => {
 });
 
 
-
-
-// Foydalanuvchi foto (reklama uchun) yuborsa — faqat admin uchun
-bot.on("photo", async (ctx) => {
-    const userId = ctx.from.id;
-    // Reklama bosqichida bo'lgan adminni qabul qilamiz
-    if (userId !== ADMIN_ID || userStates[userId] !== "waiting_for_image") return;
-
-    // Eng sifatli rasmni olish (oxirgi element eng katta bo'ladi)
-    const photo = ctx.message.photo.pop();
-    advData[userId] = { photoId: photo.file_id };
-    userStates[userId] = "waiting_for_text";
-    await ctx.reply("📝 Endi reklama matnini kiriting (matn ichida link bo‘lishi mumkin):");
-});
-
 // Reklama bosqichi: admin "📢 Reklama yuborish" tugmasini bosishi
+// Reklama yuborishni boshlash
 bot.hears("📢 Reklama yuborish", async (ctx) => {
     const userId = ctx.from.id;
     if (userId !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
 
-    // Boshlash: reklama uchun rasm so'raymiz
-    userStates[userId] = "waiting_for_image";
-    await ctx.reply("🖼 Iltimos, reklama uchun rasm yuboring:");
+    userStates[userId] = "waiting_for_adv_text";
+    await ctx.reply("📝 Reklama matnini yuboring (link ham bo'lishi mumkin):");
 });
+
 
 // Foydalanuvchilar sonini ko'rsatish (faqat admin)
 bot.hears("👥 Obunachilar soni", async (ctx) => {
@@ -151,29 +137,25 @@ bot.hears("🔍 Kino izlash", (ctx) => {
     ctx.reply("🔎 Iltimos, siz izlayotgan kino kodini yuboring!");
 });
 
-// Asosiy "text" handleri — reklama matni yoki kino kodi qabul qilinadi
 bot.on("text", async (ctx) => {
     const userId = ctx.from.id;
     const text = ctx.message.text.trim();
 
-    // Agar admin reklama jarayonida bo'lsa
-    if (userStates[userId] === "waiting_for_text") {
-        // Reklama matnini saqlaymiz va tasdiqlash bosqichiga o'tamiz
-        advData[userId].caption = text;
-        userStates[userId] = "waiting_for_confirmation";
+    // Reklama matnini qabul qilish (faqat admin uchun)
+    if (userStates[userId] === "waiting_for_adv_text") {
+        advData[userId] = { caption: text };
+        userStates[userId] = "waiting_for_text_confirm";
 
-        // Inline keyboard yordamida tasdiqlash: "✅ Ha" yoki "❌ Yo'q"
-        await ctx.reply(
+        return ctx.reply(
             "❓ Reklamani yuborishni tasdiqlaysizmi?",
             Markup.inlineKeyboard([
-                Markup.button.callback("✅ Ha", "confirm_adv"),
-                Markup.button.callback("❌ Yo'q", "cancel_adv")
+                Markup.button.callback("✅ Ha", "confirm_adv_text"),
+                Markup.button.callback("❌ Yo'q", "cancel_adv_text")
             ])
         );
-        return;
     }
 
-    // Agar reklama jarayoniga aloqador bo'lmasa, kino kodi sifatida qabul qilamiz:
+    // Aks holda kino kodi sifatida tekshiriladi:
     const filmDoc = await db.collection("films").doc(text).get();
     if (filmDoc.exists) {
         const film = filmDoc.data();
@@ -189,7 +171,7 @@ bot.on("text", async (ctx) => {
         return;
     }
 
-    // Agar kino topilmasa, so'rov Firestore ga yoziladi
+    // Kino topilmasa so'rov saqlanadi
     await db.collection("requests").add({
         title: text,
         requestedAt: admin.firestore.Timestamp.now(),
@@ -198,33 +180,30 @@ bot.on("text", async (ctx) => {
     bot.telegram.sendMessage(ADMIN_CHAT_ID, `📌 *Yangi kino so‘rovi:* ${text}`, { parse_mode: "Markdown" });
 });
 
+
 // Callback query: reklama tasdiqlash yoki bekor qilish
-bot.action("confirm_adv", async (ctx) => {
+// Tasdiqlansa matnli reklamani yuborish
+bot.action("confirm_adv_text", async (ctx) => {
     const userId = ctx.from.id;
-    // Faqat admin uchun
-    if (userId !== ADMIN_ID || userStates[userId] !== "waiting_for_confirmation") {
-        return ctx.answerCbQuery("❌ Ruxsat berilmagan yoki amal tugagan.");
+    if (userId !== ADMIN_ID || userStates[userId] !== "waiting_for_text_confirm") {
+        return ctx.answerCbQuery("❌ Ruxsat yo'q yoki amal muddati o'tgan.");
     }
 
-    // Tasdiqlandi: barcha foydalanuvchilarga reklama yuboriladi
     await ctx.answerCbQuery("Reklama yuborilmoqda...");
     const adv = advData[userId];
     const usersSnapshot = await db.collection("users").get();
 
     let success = 0;
     let failed = 0;
+
     for (const doc of usersSnapshot.docs) {
         const user = doc.data();
         try {
-            await bot.telegram.sendPhoto(user.userId, adv.photoId, {
-                caption: adv.caption,
-                parse_mode: "Markdown"
-            });
+            await bot.telegram.sendMessage(user.userId, adv.caption, { parse_mode: "Markdown" });
             success++;
         } catch (error) {
             failed++;
             console.error(`Xatolik (${user.userId}): ${error.message}`);
-            // Agar bot bloklagan yoki deaktiv bo'lgan foydalanuvchi topilsa, ularni bazadan o'chiramiz
             if (
                 error.message.includes("bot was blocked") ||
                 error.message.includes("user is deactivated")
@@ -234,12 +213,24 @@ bot.action("confirm_adv", async (ctx) => {
         }
     }
 
-    // Tasdiqlovchi adminga statistika yuboriladi
-    await ctx.reply(`✅ Reklama yuborildi!\n🟢 Muvaffaqiyatli: ${success} ta\n🔴 Xatoliklar: ${failed} ta`);
-    // Holat va saqlangan malumotlarni tozalaymiz:
+    await ctx.reply(`✅ Reklama yuborildi!\n🟢 Muvaffaqiyatli: ${success} ta\n🔴 Xatolik: ${failed} ta`);
     delete userStates[userId];
     delete advData[userId];
 });
+
+// Bekor qilish
+bot.action("cancel_adv_text", async (ctx) => {
+    const userId = ctx.from.id;
+    if (userId !== ADMIN_ID || userStates[userId] !== "waiting_for_text_confirm") {
+        return ctx.answerCbQuery("❌ Ruxsat yo'q yoki amal muddati o'tgan.");
+    }
+
+    await ctx.answerCbQuery("Bekor qilindi.");
+    await ctx.reply("❌ Reklama yuborish bekor qilindi.");
+    delete userStates[userId];
+    delete advData[userId];
+});
+
 
 bot.action("cancel_adv", async (ctx) => {
     const userId = ctx.from.id;
