@@ -160,10 +160,24 @@ bot.on("text", async (ctx) => {
     if (filmDoc.exists) {
         const film = filmDoc.data();
         try {
+            let caption = "";
+
+            if (film.title && film.title.startsWith("https://t.me/junior_pubgm")) {
+                caption += `🔗 [JUNIOR PUBGM](${film.title})\n`;
+            } else if (film.title) {
+                caption += `🎬 *${film.title}*\n`;
+            }
+
+
+            if (film.genre) caption += `📌 *Janr:* ${film.genre}\n`;
+            if (film.description) caption += `📝 *Tavsif:* ${film.description}\n`;
+            if (film.year) caption += `📅 *Yil:* ${film.year}\n`;
+
             await ctx.replyWithVideo(film.video_link, {
-                caption: `🎬 *${film.title}*\n📌 *Janr:* ${film.genre}\n📝 *Tavsif:* ${film.description}\n📅 *Yil:* ${film.year}`,
+                caption,
                 parse_mode: "Markdown"
             });
+
         } catch (err) {
             console.error("Video yuborishda xatolik:", err.message);
             await ctx.reply("❌ Video yuborishda xatolik yuz berdi.");
