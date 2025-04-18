@@ -3,7 +3,7 @@ const admin = require("firebase-admin");
 require("dotenv").config();
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const ADMIN_ID = 8027352397; // Admin Telegram ID
+const ADMIN_ID = 8027352397; 
 const ADMIN_CHAT_ID = "@azfilm_request";
 
 const serviceAccount = JSON.parse(
@@ -15,13 +15,12 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-const userStates = {}; // Foydalanuvchilarning holatini saqlash uchun
-const advData = {}; // Adminning reklama ma'lumotlarini saqlash uchun
+const userStates = {}; 
+const advData = {}; 
 
 const CHANNELS = [
     "@shar1fjanof_16",
 ];
-// START komandasi: foydalanuvchini ro'yxatdan o'tkazish va menyuni sozlash
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const userRef = db.collection("users").doc(userId.toString());
@@ -75,20 +74,17 @@ bot.action("check_membership", async (ctx) => {
     }
 
     if (notSubscribed.length === 0) {
-        // Obuna bo'lgan, endi botdan foydalanishga ruxsat beramiz
         await ctx.reply("✅ Tabriklaymiz! Siz barcha kanallarga a'zo bo'lgansiz. Endi botdan foydalanishingiz mumkin.");
-        // bu yerda menyuni chiqarish mumkin (masalan: ctx.scene.enter, yoki start menyusi)
     } else {
         await ctx.reply("❌ Siz hali quyidagi kanallarga obuna bo‘lmagansiz:\n" + notSubscribed.join("\n"));
     }
 
-    await ctx.answerCbQuery(); // tugmani bosgandagi loadingni yopish
+    await ctx.answerCbQuery();
 });
 
 bot.on('video', async (ctx) => {
     const userId = ctx.from.id;
 
-    // Faqat adminlarga ruxsat
     if (userId !== ADMIN_ID) {
         return ctx.reply("❌ Sizga ruxsat yo‘q.");
     }
@@ -101,8 +97,6 @@ bot.on('video', async (ctx) => {
 });
 
 
-// Reklama bosqichi: admin "📢 Reklama yuborish" tugmasini bosishi
-// Reklama yuborishni boshlash
 bot.hears("📢 Reklama yuborish", async (ctx) => {
     const userId = ctx.from.id;
     if (userId !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
@@ -112,14 +106,12 @@ bot.hears("📢 Reklama yuborish", async (ctx) => {
 });
 
 
-// Foydalanuvchilar sonini ko'rsatish (faqat admin)
 bot.hears("👥 Obunachilar soni", async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
     const snapshot = await db.collection("users").get();
     await ctx.reply(`📊 Hozircha botda *${snapshot.size}* ta foydalanuvchi mavjud.`, { parse_mode: "Markdown" });
 });
 
-// Kino ro'yxati
 bot.hears("📜 Kino roʻyxati", async (ctx) => {
     const snapshot = await db.collection("films").get();
     if (snapshot.empty) return ctx.reply("❌ Hozircha hech qanday kino qoʻshilmagan.");
