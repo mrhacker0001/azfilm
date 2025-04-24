@@ -19,7 +19,7 @@ const userStates = {};
 const advData = {}; 
 
 const CHANNELS = [
-    "@shar1fjanof_16",
+    "@@fcbuznews_2025",
 ];
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
