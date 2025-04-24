@@ -19,7 +19,7 @@ const userStates = {};
 const advData = {}; 
 
 const CHANNELS = [
-    "@@fcbuznews_2025",
+    "@fcbuznews_2025",
 ];
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
@@ -52,7 +52,7 @@ bot.start(async (ctx) => {
     buttons.push([Markup.button.callback("✅ Tekshirish", "check_membership")]);
 
     await ctx.reply(
-        "❌ Kechirasiz botimizdan foydalanishdan oldin ushbu kanallarga a'zo bo'lishingiz kerak.",
+        "❌ Kechirasiz botimizdan foydalanishdan oldin ushbu kanalga a'zo bo'lishingiz kerak.",
         Markup.inlineKeyboard(buttons)
     );
 });
@@ -74,9 +74,9 @@ bot.action("check_membership", async (ctx) => {
     }
 
     if (notSubscribed.length === 0) {
-        await ctx.reply("✅ Tabriklaymiz! Siz barcha kanallarga a'zo bo'lgansiz. Endi botdan foydalanishingiz mumkin.");
+        await ctx.reply("✅ Tabriklaymiz! Siz barcha kanalga a'zo bo'lgansiz. Endi botdan foydalanishingiz mumkin.");
     } else {
-        await ctx.reply("❌ Siz hali quyidagi kanallarga obuna bo‘lmagansiz:\n" + notSubscribed.join("\n"));
+        await ctx.reply("❌ Siz hali quyidagi kanalga obuna bo‘lmagansiz:\n" + notSubscribed.join("\n"));
     }
 
     await ctx.answerCbQuery();
